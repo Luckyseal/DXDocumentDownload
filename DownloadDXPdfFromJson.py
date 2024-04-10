@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 import asyncio
 import aiohttp
 
+
 async def download_image(session, img_url, file_name):
     async with session.get(img_url) as response:
         if response.status == 200:
@@ -18,7 +19,10 @@ async def download_image(session, img_url, file_name):
         else:
             print(f"Failed to download image: {img_url}")
 
+
+# 异步函数，用于下载图片
 async def download_images(url, save_root_path, img_classes):
+    # 创建HTTP会话
     async with aiohttp.ClientSession() as session:
         # 发送HTTP请求，获取网页内容
         async with session.get(url) as response:
@@ -28,7 +32,9 @@ async def download_images(url, save_root_path, img_classes):
         soup = BeautifulSoup(response_text, "html.parser")
 
         # 查找网页中 class 为rich_media_title 的<h1>标签 获取标签内容作为保存图片的文件夹名
-        folder_name = soup.find("h1", class_="rich_media_title").text.strip().replace('\\n', '')
+        folder_name = (
+            soup.find("h1", class_="rich_media_title").text.strip().replace("\\n", "")
+        )
         # 拼接保存图片的文件夹路径
         save_dir = os.path.join(save_root_path, folder_name)
         # 创建保存图片的文件夹
@@ -40,10 +46,11 @@ async def download_images(url, save_root_path, img_classes):
         # 使用异步方式下载图片
         tasks = []
         for i, img_tag in enumerate(img_tags, start=1):
-            if int(img_tag.get('data-w', 0)) < 1080:
+            # 判断图片宽度是否小于1080，小图片跳过下载
+            if int(img_tag.get("data-w", 0)) < 1080:
                 continue
 
-            img_url = img_tag.get('data-src')
+            img_url = img_tag.get("data-src")
             # img_url为空跳过
             if not img_url:
                 continue
@@ -53,7 +60,7 @@ async def download_images(url, save_root_path, img_classes):
             query_params = parse_qs(parsed_url.query)
 
             # 从原始URL参数wx_fmt获取文件格式
-            wx_fmt = query_params.get('wx_fmt')
+            wx_fmt = query_params.get("wx_fmt")
             img_name = os.path.join(save_dir, f"{i}.{wx_fmt}")
 
             # 避免重复下载
@@ -64,23 +71,41 @@ async def download_images(url, save_root_path, img_classes):
             task = asyncio.create_task(download_image(session, img_url, img_name))
             tasks.append(task)
 
+        # 等待所有任务完成
         await asyncio.gather(*tasks)
 
     return save_dir, folder_name
+
 
 def convert_image_to_pdf(image_path, pdf_path):
     image = Image.open(image_path)
     image.save(pdf_path, "PDF", resolution=100.0)
 
+
 def merge_pdfs(pdf_paths, output_path):
+    # 创建一个PdfFileMerger对象
     merger = PdfFileMerger()
+
+    # 遍历pdf_paths中的每一个pdf文件
     for pdf_path in pdf_paths:
+        # 以二进制模式打开pdf文件
         with open(pdf_path, "rb") as file:
+            # 创建一个PdfFileReader对象
             pdf_reader = PdfFileReader(file)
+            # 将pdf_reader添加到merger中
             merger.append(pdf_reader)
 
+    # 以二进制模式打开output_path
     with open(output_path, "wb") as output_file:
+        # 将merger写入output_file
         merger.write(output_file)
+
+    # 关闭merger
+    merger.close()
+
+    # 打印合并后的pdf文件路径
+    print(f"Merged PDF file: {output_path}")
+
 
 def is_image(file_path):
     try:
@@ -89,19 +114,25 @@ def is_image(file_path):
     except IOError:
         return False
 
+
 async def main():
     # 读取文件夹downloadsource.json文件内容，下载download_url网页的图片，并保存到源文件所在目录下的images文件夹
     with open("downloadsource.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 遍历data对象，获取downloadUrl属性
-    for document_item in data:
-        if document_item["downloadUrl"]:
+    # 获取PdfRootPath
+    pdf_root_path = data.get("PdfRootPath", ".")
+
+    # 遍历data对象的documents列表，获取downloadUrl属性
+    for document_item in data.get("DownloadSrcInfro", []):
+        if document_item.get("downloadUrl"):
             # 判断isDownloaded属性是否为True，如果为True，则跳过
-            if document_item["isDownloaded"]:
+            if document_item.get("isDownloaded", False):
                 continue
 
-            save_dir, pdf_file_name = await download_images(document_item["downloadUrl"], "./", document_item["imgClasses"])
+            save_dir, pdf_file_name = await download_images(
+                document_item["downloadUrl"], pdf_root_path, document_item["imgClasses"]
+            )
 
             # 遍历文件夹save_dir中的所有文件，按文件名升序排序后，将图片转换为pdf，并保存到源文件所在目录下的临时pdf文件夹下
             pdf_paths = []
@@ -111,7 +142,9 @@ async def main():
                 if is_image(image_path):
                     # 拼接pdf保存路径和文件名
                     filename, extension = os.path.splitext(os.path.basename(image_path))
-                    pdf_path = os.path.normpath(os.path.join(save_dir, f"{filename}.pdf"))
+                    pdf_path = os.path.normpath(
+                        os.path.join(save_dir, f"{filename}.pdf")
+                    )
 
                     # 转换图片为pdf
                     if not os.path.exists(pdf_path):
@@ -125,8 +158,12 @@ async def main():
                     os.remove(image_path)
 
             # 合并pdf文件
-            pdf_full_path = os.path.normpath(os.path.join(save_dir, f"{pdf_file_name}.pdf"))
-            sorted_pdf_paths = sorted(pdf_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
+            pdf_full_path = os.path.normpath(
+                os.path.join(save_dir, f"{pdf_file_name}.pdf")
+            )
+            sorted_pdf_paths = sorted(
+                pdf_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+            )
             merge_pdfs(sorted_pdf_paths, pdf_full_path)
 
             # 更新downloadUrl的json对象的isDownloaded属性为True，pdfSavePath属性为PDF文件的绝对路径
@@ -135,6 +172,7 @@ async def main():
     # 保存更新后的data对象到文件夹downloadsource.json
     with open("downloadsource.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
