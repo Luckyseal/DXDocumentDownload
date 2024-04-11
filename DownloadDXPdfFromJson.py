@@ -13,6 +13,7 @@ import re
 import unicodedata
 import tempfile
 
+
 def sanitize_filename(filename, replace_with="_", max_length=255):
     """
     将无效的Windows文件名字符替换为有效字符,支持中文和英文。
@@ -24,11 +25,17 @@ def sanitize_filename(filename, replace_with="_", max_length=255):
     try:
         # 删除文件名中的无效字符
         invalid_chars_regex = r'[\\/:*?"<>|]'
-        cleaned_filename = re.sub(invalid_chars_regex, replace_with, unicodedata.normalize('NFKD', filename))
+        cleaned_filename = re.sub(
+            invalid_chars_regex, replace_with, unicodedata.normalize("NFKD", filename)
+        )
 
         # 删除文件名中的保留字符
-        reserved_names = ["CON", "PRN", "AUX", "NUL"] + [f"COM{i}" for i in range(10)] + [f"LPT{i}" for i in range(10)]
-        #reserved_regex = r'^(?i)(' + '|'.join(reserved_names) + r')\.?'
+        reserved_names = (
+            ["CON", "PRN", "AUX", "NUL"]
+            + [f"COM{i}" for i in range(10)]
+            + [f"LPT{i}" for i in range(10)]
+        )
+        # reserved_regex = r'^(?i)(' + '|'.join(reserved_names) + r')\.?'
         if cleaned_filename.upper() in reserved_names:
             raise ValueError(f"文件名不能使用保留字: {cleaned_filename}")
 
@@ -50,9 +57,10 @@ def sanitize_filename(filename, replace_with="_", max_length=255):
         print(f"Error occurred while sanitizing filename: {e}")
         return filename
 
+
 async def download_image(session, img_url, file_name):
-    '''
-    Download an image from a given URL and save it to a file with a given name.'''
+    """
+    Download an image from a given URL and save it to a file with a given name."""
     try:
         async with session.get(img_url) as response:
             if response.status == 200:
@@ -64,6 +72,7 @@ async def download_image(session, img_url, file_name):
                 print(f"Failed to download image: {img_url}")
     except Exception as e:
         print(f"Error occurred while downloading image {img_url}: {e}")
+
 
 async def download_images(url, save_root_path, img_classes):
     try:
@@ -79,7 +88,9 @@ async def download_images(url, save_root_path, img_classes):
 
             folder_name = soup.find("h1", class_="rich_media_title")
             if folder_name:
-                folder_name = sanitize_filename(folder_name.text.strip().replace("\\n", ""))
+                folder_name = sanitize_filename(
+                    folder_name.text.strip().replace("\\n", "")
+                )
             else:
                 print(f"Unable to find folder name in URL: {url}")
                 return None, None
@@ -136,23 +147,25 @@ async def download_images(url, save_root_path, img_classes):
         print(f"Error occurred while downloading images: {e}")
         return None, None
 
-def convert_image_to_pdf(image_path, pdf_path):
-    '''
+
+async def convert_image_to_pdf(image_path, pdf_path):
+    """
     Convert an image to a PDF file.
     :param image_path: The path to the image file.
     :param pdf_path: The path to the output PDF file.
     :return: None
-    '''
+    """
     image = Image.open(image_path)
     image.save(pdf_path, "PDF", resolution=100.0)
 
+
 def merge_pdfs_worker(pdf_paths, output_path):
-    '''
+    """
     Merge a list of PDF files into a single PDF file.
     :param pdf_paths: A list of paths to the PDF files to be merged.
     :param output_path: The path to the output PDF file.
     :return: None
-    '''
+    """
     merger = PdfMerger()
 
     for pdf_path in pdf_paths:
@@ -165,20 +178,26 @@ def merge_pdfs_worker(pdf_paths, output_path):
 
     print(f"Merged PDF file: {output_path}")
 
+
 import tempfile
+
 
 def merge_pdfs(pdf_paths, output_path, num_processes=4):
     if not pdf_paths:
         raise ValueError("pdf_paths cannot be empty")
 
     chunk_size = (len(pdf_paths) + num_processes - 1) // num_processes
-    chunks = [pdf_paths[i:i+chunk_size] for i in range(0, len(pdf_paths), chunk_size)]
+    chunks = [
+        pdf_paths[i : i + chunk_size] for i in range(0, len(pdf_paths), chunk_size)
+    ]
 
     processes = []
     with tempfile.TemporaryDirectory() as temp_dir:
         for i, chunk in enumerate(chunks):
             output_chunk_path = os.path.join(temp_dir, f"part{i}.pdf")
-            p = multiprocessing.Process(target=merge_pdfs_worker, args=(chunk, output_chunk_path))
+            p = multiprocessing.Process(
+                target=merge_pdfs_worker, args=(chunk, output_chunk_path)
+            )
             processes.append(p)
             p.start()
 
@@ -197,12 +216,82 @@ def merge_pdfs(pdf_paths, output_path, num_processes=4):
 
         print(f"Merged PDF file: {output_path}")
 
+
 def is_image(file_path):
     try:
         Image.open(file_path)
         return True
     except IOError:
         return False
+
+async def remove_file(file_path):
+    try:
+        os.remove(file_path)
+        print(f"Removed file: {file_path}")
+
+        # Create a future object to hold the result
+        future = asyncio.Future()
+
+        # Set the result of the future object
+        future.set_result(None)
+
+        return future
+    except Exception as e:
+        print(f"Error occurred while removing file: {e}")
+        return None
+
+async def download_and_process_document(document_item, pdf_root_path):
+    """Downloads, processes, and merges images for a single document."""
+    download_url = document_item.get("downloadUrl")
+    if not download_url:
+        return
+
+    if document_item.get("isDownloaded", False):
+        return
+
+    save_dir, pdf_file_name = await download_images(
+        download_url, pdf_root_path, document_item["imgClasses"]
+    )
+    if not save_dir:
+        return
+
+    pdf_paths = []
+
+    async def process_image(image_path):
+        """Processes a single image and converts it to PDF if needed."""
+        if not is_image(image_path):
+            return
+
+        filename, extension = os.path.splitext(os.path.basename(image_path))
+        pdf_path = os.path.normpath(os.path.join(save_dir, f"{filename}.pdf"))
+
+        if not os.path.exists(pdf_path):
+            await convert_image_to_pdf(image_path, pdf_path)
+        else:
+            print(f"PDF file {pdf_path} already exists.")
+
+        pdf_paths.append(pdf_path)
+        await remove_file(image_path)
+
+    # Process images concurrently using asyncio.gather
+    tasks = [
+        process_image(os.path.join(save_dir, image_path))
+        for image_path in sorted(os.listdir(save_dir))
+    ]
+    await asyncio.gather(*tasks)
+
+    sorted_pdf_paths = sorted(
+        pdf_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0])
+    )
+    merge_pdfs(sorted_pdf_paths, os.path.join(save_dir, f"{pdf_file_name}.pdf"))
+
+    document_item.update(
+        {
+            "isDownloaded": True,
+            "pdfSavePath": os.path.join(save_dir, f"{pdf_file_name}.pdf"),
+        }
+    )
+
 
 async def main():
     data = None
@@ -211,41 +300,15 @@ async def main():
 
     pdf_root_path = data["PdfSaveRootPath"]
 
-    for document_item in data["DownloadSrcs"]:
-        if document_item.get("downloadUrl"):
-            if document_item.get("isDownloaded", False):
-                continue
-
-            save_dir, pdf_file_name = await download_images(
-                document_item["downloadUrl"], pdf_root_path, document_item["imgClasses"]
-            )
-
-            if save_dir is None:
-                continue
-
-            pdf_paths = []
-            for image_path in sorted(os.listdir(save_dir)):
-                image_path = os.path.normpath(os.path.join(save_dir, image_path))
-                if is_image(image_path):
-                    filename, extension = os.path.splitext(os.path.basename(image_path))
-                    pdf_path = os.path.normpath(os.path.join(save_dir, f"{filename}.pdf"))
-
-                    if not os.path.exists(pdf_path):
-                        convert_image_to_pdf(image_path, pdf_path)
-                    else:
-                        print(f"PDF file {pdf_path} already exists.")
-
-                    pdf_paths.append(pdf_path)
-                    os.remove(image_path)
-
-            pdf_full_path = os.path.normpath(os.path.join(save_dir, f"{pdf_file_name}.pdf"))
-            sorted_pdf_paths = sorted(pdf_paths, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
-            merge_pdfs(sorted_pdf_paths, pdf_full_path)
-
-            document_item.update({"isDownloaded": True, "pdfSavePath": pdf_full_path})
+    tasks = [
+        download_and_process_document(doc, pdf_root_path)
+        for doc in data["DownloadSrcs"]
+    ]
+    await asyncio.gather(*tasks)
 
     with open("downloadsource.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
