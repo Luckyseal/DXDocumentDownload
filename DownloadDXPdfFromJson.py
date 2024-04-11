@@ -178,10 +178,6 @@ def merge_pdfs_worker(pdf_paths, output_path):
 
     print(f"Merged PDF file: {output_path}")
 
-
-import tempfile
-
-
 def merge_pdfs(pdf_paths, output_path, num_processes=4):
     if not pdf_paths:
         raise ValueError("pdf_paths cannot be empty")
@@ -224,6 +220,7 @@ def is_image(file_path):
     except IOError:
         return False
 
+
 async def remove_file(file_path):
     try:
         os.remove(file_path)
@@ -239,6 +236,7 @@ async def remove_file(file_path):
     except Exception as e:
         print(f"Error occurred while removing file: {e}")
         return None
+
 
 async def download_and_process_document(document_item, pdf_root_path):
     """Downloads, processes, and merges images for a single document."""
