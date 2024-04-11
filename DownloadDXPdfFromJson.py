@@ -1,35 +1,45 @@
 import os
-import requests
 from bs4 import BeautifulSoup
-from PyPDF2 import PdfFileMerger, PdfFileReader
+from PyPDF2 import PdfMerger, PdfReader
 from PIL import Image
 import json
 from urllib.parse import parse_qs, urlparse
 import asyncio
 import aiohttp
-import pandas as pd
+import multiprocessing
+import unicodedata
 
 import re
-import string
+import unicodedata
+import tempfile
 
-def sanitize_filename(filename, replace_with="_"):
+def sanitize_filename(filename, replace_with="_", max_length=255):
     """
-    将无效的Windows文件名字符替换为有效字符。
+    将无效的Windows文件名字符替换为有效字符,支持中文和英文。
     :param filename: 原始文件名
     :param replace_with: 用于替换无效字符的字符
+    :param max_length: 文件名的最大长度
     :return: 符合Windows文件名规范的新文件名
     """
     try:
         # 删除文件名中的无效字符
-        valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-        cleaned_filename = "".join(c if c in valid_chars else replace_with for c in filename)
+        invalid_chars_regex = r'[\\/:*?"<>|]'
+        cleaned_filename = re.sub(invalid_chars_regex, replace_with, unicodedata.normalize('NFKD', filename))
 
         # 删除文件名中的保留字符
-        reserved_names = ['con', 'prn', 'aux', 'nul'] + [f"com{i}" for i in range(10)] + [f"lpt{i}" for i in range(10)]
-        cleaned_filename = re.sub(r'^(?i)(' + '|'.join(reserved_names) + r')\.?', replace_with, cleaned_filename)
+        reserved_names = ["CON", "PRN", "AUX", "NUL"] + [f"COM{i}" for i in range(10)] + [f"LPT{i}" for i in range(10)]
+        #reserved_regex = r'^(?i)(' + '|'.join(reserved_names) + r')\.?'
+        if cleaned_filename.upper() in reserved_names:
+            raise ValueError(f"文件名不能使用保留字: {cleaned_filename}")
 
         # 删除文件名前后的空格和点号
         cleaned_filename = cleaned_filename.strip(" .")
+        # 将连续的点号替换为单个点号
+        cleaned_filename = re.sub(r"\.+", ".", cleaned_filename)
+
+        # 限制文件名长度
+        if len(cleaned_filename) > max_length:
+            cleaned_filename = cleaned_filename[:max_length]
 
         # 如果文件名为空,返回默认名称
         if not cleaned_filename:
@@ -41,6 +51,8 @@ def sanitize_filename(filename, replace_with="_"):
         return filename
 
 async def download_image(session, img_url, file_name):
+    '''
+    Download an image from a given URL and save it to a file with a given name.'''
     try:
         async with session.get(img_url) as response:
             if response.status == 200:
@@ -67,12 +79,12 @@ async def download_images(url, save_root_path, img_classes):
 
             folder_name = soup.find("h1", class_="rich_media_title")
             if folder_name:
-                folder_name = folder_name.text.strip().replace("\\n", "")
+                folder_name = sanitize_filename(folder_name.text.strip().replace("\\n", ""))
             else:
                 print(f"Unable to find folder name in URL: {url}")
                 return None, None
 
-            save_dir = os.path.join(save_root_path, sanitize_filename(folder_name))
+            save_dir = os.path.join(save_root_path, folder_name)
             os.makedirs(save_dir, exist_ok=True)
 
             img_tags = soup.find_all("img", class_=img_classes)
@@ -113,7 +125,10 @@ async def download_images(url, save_root_path, img_classes):
 
                     yield download_image_task(img_url, img_name)
 
-            tasks = [task for task in generate_tasks()]
+            tasks = []
+            async for task in generate_tasks():
+                tasks.append(task)
+
             await asyncio.gather(*tasks)
 
         return save_dir, folder_name
@@ -122,15 +137,27 @@ async def download_images(url, save_root_path, img_classes):
         return None, None
 
 def convert_image_to_pdf(image_path, pdf_path):
+    '''
+    Convert an image to a PDF file.
+    :param image_path: The path to the image file.
+    :param pdf_path: The path to the output PDF file.
+    :return: None
+    '''
     image = Image.open(image_path)
     image.save(pdf_path, "PDF", resolution=100.0)
 
 def merge_pdfs_worker(pdf_paths, output_path):
-    merger = PdfFileMerger()
+    '''
+    Merge a list of PDF files into a single PDF file.
+    :param pdf_paths: A list of paths to the PDF files to be merged.
+    :param output_path: The path to the output PDF file.
+    :return: None
+    '''
+    merger = PdfMerger()
 
     for pdf_path in pdf_paths:
         with open(pdf_path, "rb") as file:
-            pdf_reader = PdfFileReader(file)
+            pdf_reader = PdfReader(file)
             merger.append(pdf_reader)
 
     with open(output_path, "wb") as output_file:
@@ -138,32 +165,37 @@ def merge_pdfs_worker(pdf_paths, output_path):
 
     print(f"Merged PDF file: {output_path}")
 
+import tempfile
+
 def merge_pdfs(pdf_paths, output_path, num_processes=4):
-    chunk_size = len(pdf_paths) // num_processes
+    if not pdf_paths:
+        raise ValueError("pdf_paths cannot be empty")
+
+    chunk_size = (len(pdf_paths) + num_processes - 1) // num_processes
     chunks = [pdf_paths[i:i+chunk_size] for i in range(0, len(pdf_paths), chunk_size)]
 
     processes = []
-    for i, chunk in enumerate(chunks):
-        output_chunk_path = f"{output_path}.part{i}.pdf"
-        p = multiprocessing.Process(target=merge_pdfs_worker, args=(chunk, output_chunk_path))
-        processes.append(p)
-        p.start()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        for i, chunk in enumerate(chunks):
+            output_chunk_path = os.path.join(temp_dir, f"part{i}.pdf")
+            p = multiprocessing.Process(target=merge_pdfs_worker, args=(chunk, output_chunk_path))
+            processes.append(p)
+            p.start()
 
-    for p in processes:
-        p.join()
+        for p in processes:
+            p.join()
 
-    merger = PdfFileMerger()
-    for i in range(len(chunks)):
-        part_path = f"{output_path}.part{i}.pdf"
-        with open(part_path, "rb") as file:
-            pdf_reader = PdfFileReader(file)
-            merger.append(pdf_reader)
-        os.remove(part_path)
+        merger = PdfMerger()
+        for i in range(len(chunks)):
+            part_path = os.path.join(temp_dir, f"part{i}.pdf")
+            with open(part_path, "rb") as file:
+                pdf_reader = PdfReader(file)
+                merger.append(pdf_reader)
 
-    with open(output_path, "wb") as output_file:
-        merger.write(output_file)
+        with open(output_path, "wb") as output_file:
+            merger.write(output_file)
 
-    print(f"Merged PDF file: {output_path}")
+        print(f"Merged PDF file: {output_path}")
 
 def is_image(file_path):
     try:
@@ -200,10 +232,10 @@ async def main():
 
                     if not os.path.exists(pdf_path):
                         convert_image_to_pdf(image_path, pdf_path)
-                        pdf_paths.append(pdf_path)
                     else:
                         print(f"PDF file {pdf_path} already exists.")
 
+                    pdf_paths.append(pdf_path)
                     os.remove(image_path)
 
             pdf_full_path = os.path.normpath(os.path.join(save_dir, f"{pdf_file_name}.pdf"))
