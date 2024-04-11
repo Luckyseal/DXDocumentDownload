@@ -7,74 +7,111 @@ import json
 from urllib.parse import parse_qs, urlparse
 import asyncio
 import aiohttp
+import pandas as pd
 
+import re
+import string
+
+def sanitize_filename(filename, replace_with="_"):
+    """
+    将无效的Windows文件名字符替换为有效字符。
+    :param filename: 原始文件名
+    :param replace_with: 用于替换无效字符的字符
+    :return: 符合Windows文件名规范的新文件名
+    """
+    try:
+        # 删除文件名中的无效字符
+        valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+        cleaned_filename = "".join(c if c in valid_chars else replace_with for c in filename)
+
+        # 删除文件名中的保留字符
+        reserved_names = ['con', 'prn', 'aux', 'nul'] + [f"com{i}" for i in range(10)] + [f"lpt{i}" for i in range(10)]
+        cleaned_filename = re.sub(r'^(?i)(' + '|'.join(reserved_names) + r')\.?', replace_with, cleaned_filename)
+
+        # 删除文件名前后的空格和点号
+        cleaned_filename = cleaned_filename.strip(" .")
+
+        # 如果文件名为空,返回默认名称
+        if not cleaned_filename:
+            cleaned_filename = "default_filename"
+
+        return cleaned_filename
+    except Exception as e:
+        print(f"Error occurred while sanitizing filename: {e}")
+        return filename
 
 async def download_image(session, img_url, file_name):
-    async with session.get(img_url) as response:
-        if response.status == 200:
-            img_data = await response.read()
-            with open(file_name, "wb") as f:
-                f.write(img_data)
-            print(f"Downloaded image: {file_name}")
-        else:
-            print(f"Failed to download image: {img_url}")
+    try:
+        async with session.get(img_url) as response:
+            if response.status == 200:
+                img_data = await response.read()
+                with open(file_name, "wb") as f:
+                    f.write(img_data)
+                print(f"Downloaded image: {file_name}")
+            else:
+                print(f"Failed to download image: {img_url}")
+    except Exception as e:
+        print(f"Error occurred while downloading image {img_url}: {e}")
 
 
 # 异步函数，用于下载图片
 async def download_images(url, save_root_path, img_classes):
-    # 创建HTTP会话
-    async with aiohttp.ClientSession() as session:
-        # 发送HTTP请求，获取网页内容
-        async with session.get(url) as response:
-            response_text = await response.text()
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    response_text = await response.text()
+                else:
+                    print(f"Failed to fetch URL: {url}")
+                    return None, None
 
-        # 使用BeautifulSoup解析网页内容
-        soup = BeautifulSoup(response_text, "html.parser")
+            soup = BeautifulSoup(response_text, "html.parser")
 
-        # 查找网页中 class 为rich_media_title 的<h1>标签 获取标签内容作为保存图片的文件夹名
-        folder_name = (
-            soup.find("h1", class_="rich_media_title").text.strip().replace("\\n", "")
-        )
-        # 拼接保存图片的文件夹路径
-        save_dir = os.path.join(save_root_path, folder_name)
-        # 创建保存图片的文件夹
-        os.makedirs(save_dir, exist_ok=True)
+            folder_name = soup.find("h1", class_="rich_media_title")
+            if folder_name:
+                folder_name = folder_name.text.strip().replace("\\n", "")
+            else:
+                print(f"Unable to find folder name in URL: {url}")
+                return None, None
 
-        # 查找网页中的所有 class 为rich_pages wxw-img的<img>标签
-        img_tags = soup.find_all("img", class_=img_classes)
+            save_dir = os.path.join(save_root_path, sanitize_filename(folder_name))
+            os.makedirs(save_dir, exist_ok=True)
 
-        # 使用异步方式下载图片
-        tasks = []
-        for i, img_tag in enumerate(img_tags, start=1):
-            # 判断图片宽度是否小于1080，小图片跳过下载
-            if int(img_tag.get("data-w", 0)) < 1080:
-                continue
+            img_tags = soup.find_all("img", class_=img_classes)
 
-            img_url = img_tag.get("data-src")
-            # img_url为空跳过
-            if not img_url:
-                continue
+            tasks = []
+            for i, img_tag in enumerate(img_tags, start=1):
+                if int(img_tag.get("data-w", 0)) < 1000:
+                    continue
 
-            # 解析img_url,获取URL参数的值。
-            parsed_url = urlparse(img_url)
-            query_params = parse_qs(parsed_url.query)
+                img_url = img_tag.get("data-src")
+                if not img_url:
+                    continue
 
-            # 从原始URL参数wx_fmt获取文件格式
-            wx_fmt = query_params.get("wx_fmt")
-            img_name = os.path.join(save_dir, f"{i}.{wx_fmt}")
+                parsed_url = urlparse(img_url)
+                query_params = parse_qs(parsed_url.query)
 
-            # 避免重复下载
-            if os.path.exists(img_name):
-                print(f"Image {img_name} already exists.")
-                continue
+                wx_fmt = query_params.get("wx_fmt")
+                if wx_fmt:
+                    wx_fmt = wx_fmt[0]
+                else:
+                    wx_fmt = "jpg"
 
-            task = asyncio.create_task(download_image(session, img_url, img_name))
-            tasks.append(task)
+                img_name = os.path.join(save_dir, f"{i}.{wx_fmt}")
 
-        # 等待所有任务完成
-        await asyncio.gather(*tasks)
+                if os.path.exists(img_name):
+                    print(f"Image {img_name} already exists.")
+                    continue
 
-    return save_dir, folder_name
+                task = asyncio.create_task(download_image(session, img_url, img_name))
+                tasks.append(task)
+
+            await asyncio.gather(*tasks)
+
+        return save_dir, folder_name
+    except Exception as e:
+        print(f"Error occurred while downloading images: {e}")
+        return None, None
 
 
 def convert_image_to_pdf(image_path, pdf_path):
@@ -116,15 +153,16 @@ def is_image(file_path):
 
 
 async def main():
-    # 读取文件夹downloadsource.json文件内容，下载download_url网页的图片，并保存到源文件所在目录下的images文件夹
-    with open("downloadsource.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+    #从文件中读取一个嵌套json结构，其中包含一个名为"DownloadSrcInfro"的列表，列表中的每个元素都包含一个名为"downloadUrl"的属性
+    data_str = None
+    with open(".\downloadsource.json", "r", encoding="utf-8") as f:
+        data= json.load(f)
+        
     # 获取PdfRootPath
-    pdf_root_path = data.get("PdfRootPath", ".")
+    pdf_root_path = data["PdfSaveRootPath"]
 
     # 遍历data对象的documents列表，获取downloadUrl属性
-    for document_item in data.get("DownloadSrcInfro", []):
+    for document_item in data["DownloadSrcs"]:
         if document_item.get("downloadUrl"):
             # 判断isDownloaded属性是否为True，如果为True，则跳过
             if document_item.get("isDownloaded", False):

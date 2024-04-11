@@ -1,41 +1,54 @@
 {
-    "PdfRootPath":"E:\\职业与求职\\企业数字化咨询",
-    "DownloadSrcInfro":
+    "PdfSaveRootPath":"E:\\职业与求职\\企业数字化咨询",
+    "DownloadSrcs":
     [
+        {
+            "downloadUrl": "https://mp.weixin.qq.com/s/z7d_3-FKPEjUBVJdEsfi5Q",
+            "isDownloaded": false,
+            "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1040,
+            "pdfSavePath": "./2023大模型落地应用案例集\\2023大模型落地应用案例集.pdf"
+        },
         {
             "downloadUrl": "https://mp.weixin.qq.com/s?__biz=MzI2NjMxMTgwNA==&mid=2247631112&idx=2&sn=4cb2a689d1fa7030042e6008c19baef5&chksm=eba730479f2b052c9bf5a6196545bc4f232a34f8efd58029237cb80fd66b53a965f77baae56b&xtrack=1&scene=90&subscene=93&sessionid=1712622373&flutter_pos=8&clicktime=1712622489&enterid=1712622489&finder_biz_enter_id=4&ranksessionid=1712622405&ascene=56&fasttmpl_type=0&fasttmpl_fullversion=7154300-zh_CN-zip&fasttmpl_flag=0&realreporttime=1712622489374&devicetype=android-33&version=2800303f&nettype=WIFI&abtest_cookie=AAACAA%3D%3D&lang=zh_CN&session_us=gh_afd51c79091d&countrycode=AL&exportkey=n_ChQIAhIQUWU2jyW6p4vPGOttUTWLCBLgAQIE97dBBAEAAAAAAIhmOQgV%2FH8AAAAOpnltbLcz9gKNyK89dVj0wmIiy%2FaJ72urYOyx8uk8y4tSy2jHLnyKT4wVLwGfeiKH%2BHUGWwrsy6k3YtwMYLCr73HJ7Bewr4o%2BHzofUo1chNBlAMMBCk4LBt6zQpOYDegwvj0oi1%2FI8lP9BWIS2I2wwKUJP5mhFSwoETkyI6aRRHfTnWSGVYZqKuTRjLtaCxmxOtHR4FZhXAF3uIU5G1D%2FtFTnzGA%2FCIo7sfqd8MQkyS%2FgXjPcTPJiJcnS968MLSv58L59OqiWPxqN&pass_ticket=XvVpNrbsfv9J73QdiD4lvek9EjcQUA2RojcdCjdYDT%2BpMCZjL0lhsjB115ysY%2FNYjRm5AwNT%2BpjVG3k4U%2FknWw%3D%3D&wx_header=3",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1024,
             "pdfSavePath": "./2023大模型落地应用案例集\\2023大模型落地应用案例集.pdf"
         },
         {
             "downloadUrl": "https://mp.weixin.qq.com/s?chksm=ea9cbce3ddeb35f505b993ec34e697b93d5fc507dc469b1cfd6f027f7d50ade75613feed098c&exptype=subscribed_raw_exper_tlfeeds&ranksessionid=1712584096_1&mid=2247630320&sn=8ec46ec32becdcc373c1e336990c7b8b&idx=1&__biz=MzI2NjMxMTgwNA%3D%3D&scene=169&subscene=200&sessionid=1712582208&flutter_pos=40&clicktime=1712584208&enterid=1712584208&finder_biz_enter_id=5&ascene=56&fasttmpl_type=0&fasttmpl_fullversion=7153217-zh_CN-zip&fasttmpl_flag=0&realreporttime=1712584208396&devicetype=android-33&version=2800303f&nettype=WIFI&abtest_cookie=AAACAA%3D%3D&lang=zh_CN&session_us=gh_afd51c79091d&countrycode=AL&exportkey=n_ChQIAhIQPR3DzyM2uvzMB70BxaADVBLgAQIE97dBBAEAAAAAAG%2BEANxph6YAAAAOpnltbLcz9gKNyK89dVj04zc1CBzfaQNdZJEiRJ6rwYAah6y5ikxiGcr0dCpBZTDX%2BjZE65c%2FUFq%2B9XTOjjCUbCiaxMjcdVU0xRTbqiuIKxL5YhGVKCtwBuaf64VA1IVpERQE5pQE7Vmq3e5Uq0vyhQc6SAouCEbxXEufnUafCXXqTkFXGnwAggpSeTN4%2FbqUnvRt3o1U5v4sIYKFEmPTyIiIQRbVfoj0z9b5r2fL%2F2AnrGxcvno5LwEBM3NIxbLCU%2B6HJLgCTQu8&pass_ticket=IZ3xfP%2F3WwGifvI40AcyewogDOfW0WDqJy9wk2nFJxvXuS6kXenCgG0hjxcG0oH6IX3TVGXEE03ov%2F%2FqQGdyhA%3D%3D&wx_header=3",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img",
+            "imgWidth":1024,
             "pdfSavePath": "./读懂《数字化转型方法论》193页满分材料\\读懂《数字化转型方法论》193页满分材料.pdf"
         },
         {
             "downloadUrl": " https://mp.weixin.qq.com/s/kM01FxlLtSkkuL827osrZQ",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1024,
             "pdfSavePath": "./企业数字化转型战略咨询及IT总体规划（90页汇报满分PPT）\\企业数字化转型战略咨询及IT总体规划（90页汇报满分PPT）.pdf"
         },
         {
             "downloadUrl": "https://mp.weixin.qq.com/s/NwtItespFeUp0I7meCIPPQ",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1024,
             "pdfSavePath": "./智能制造白皮书方法论-制造业数字化转型（满分PPT）\\智能制造白皮书方法论-制造业数字化转型（满分PPT）.pdf"
         },
         {
             "downloadUrl": "https://mp.weixin.qq.com/s/kM01FxlLtSkkuL827osrZQ",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1024,
             "pdfSavePath": "./企业数字化转型战略咨询及IT总体规划（90页汇报满分PPT）\\企业数字化转型战略咨询及IT总体规划（90页汇报满分PPT）.pdf"
         },
         {
             "downloadUrl": "https://mp.weixin.qq.com/s/NZWCKtsPOP6UHk87i4Z51w",
             "isDownloaded": true,
             "imgClasses": "rich_pages wxw-img js_insertlocalimg",
+            "imgWidth":1024,
             "pdfSavePath": "./MES系统基础与应用培训精品课件（300页最全培训PPT）\\MES系统基础与应用培训精品课件（300页最全培训PPT）.pdf"
         }
     ]
