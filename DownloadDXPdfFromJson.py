@@ -6,7 +6,8 @@ import json
 from urllib.parse import parse_qs, urlparse
 import asyncio
 import aiohttp
-import multiprocessing
+from multiprocessing import Pool, Queue
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import unicodedata
 
 import re
@@ -159,11 +160,12 @@ async def convert_image_to_pdf(image_path, pdf_path):
     image.save(pdf_path, "PDF", resolution=100.0)
 
 
-def merge_pdfs_worker(pdf_paths, output_path):
+def merge_pdfs_worker(pdf_paths, output_path, result_queue):
     """
     Merge a list of PDF files into a single PDF file.
     :param pdf_paths: A list of paths to the PDF files to be merged.
     :param output_path: The path to the output PDF file.
+    :param result_queue: A shared queue to put the merged PDF path.
     :return: None
     """
     merger = PdfMerger()
@@ -177,40 +179,56 @@ def merge_pdfs_worker(pdf_paths, output_path):
         merger.write(output_file)
 
     print(f"Merged PDF file: {output_path}")
+    result_queue.put(output_path)
 
-def merge_pdfs(pdf_paths, output_path, num_processes=4):
+
+
+async def merge_pdfs(pdf_paths, output_path, num_processes=4):
     if not pdf_paths:
         raise ValueError("pdf_paths cannot be empty")
 
+    result_queue = Queue()
     chunk_size = (len(pdf_paths) + num_processes - 1) // num_processes
     chunks = [
         pdf_paths[i : i + chunk_size] for i in range(0, len(pdf_paths), chunk_size)
     ]
 
-    processes = []
-    with tempfile.TemporaryDirectory() as temp_dir:
+    with Pool(num_processes) as pool:
+        async_results = []
         for i, chunk in enumerate(chunks):
-            output_chunk_path = os.path.join(temp_dir, f"part{i}.pdf")
-            p = multiprocessing.Process(
-                target=merge_pdfs_worker, args=(chunk, output_chunk_path)
+            output_chunk_path = os.path.join(tempfile.gettempdir(), f"part{i}.pdf")
+            async_result = pool.apply_async(
+                merge_pdfs_worker, args=(chunk, output_chunk_path, result_queue)
             )
-            processes.append(p)
-            p.start()
+            async_results.append(async_result)
 
-        for p in processes:
-            p.join()
+        while any(not ar.ready() for ar in async_results):
+            for ar in async_results:
+                if ar.ready():
+                    async_results.remove(ar)
+                    if len(chunks) > 0:
+                        chunk = chunks.pop(0)
+                        output_chunk_path = os.path.join(tempfile.gettempdir(), f"part{len(async_results)}.pdf")
+                        async_result = pool.apply_async(
+                            merge_pdfs_worker, args=(chunk, output_chunk_path, result_queue)
+                        )
+                        async_results.append(async_result)
 
-        merger = PdfMerger()
-        for i in range(len(chunks)):
-            part_path = os.path.join(temp_dir, f"part{i}.pdf")
-            with open(part_path, "rb") as file:
-                pdf_reader = PdfReader(file)
-                merger.append(pdf_reader)
+        pool.close()
+        pool.join()
 
-        with open(output_path, "wb") as output_file:
-            merger.write(output_file)
+    merger = PdfMerger()
+    while not result_queue.empty():
+        part_path = result_queue.get()
+        with open(part_path, "rb") as file:
+            pdf_reader = PdfReader(file)
+            merger.append(pdf_reader)
+        os.remove(part_path)
 
-        print(f"Merged PDF file: {output_path}")
+    with open(output_path, "wb") as output_file:
+        merger.write(output_file)
+
+    print(f"Merged PDF file: {output_path}")
 
 
 def is_image(file_path):
